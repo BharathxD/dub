@@ -168,7 +168,6 @@ function LinkBuilderInner({
     return Boolean(
       !showLinkBuilder ||
         isSubmitting ||
-        isSubmitSuccessful ||
         errors.key ||
         errors.url ||
         (props && !isDirty),
@@ -176,7 +175,6 @@ function LinkBuilderInner({
   }, [
     showLinkBuilder,
     isSubmitting,
-    isSubmitSuccessful,
     errors,
     props,
     isDirty,
