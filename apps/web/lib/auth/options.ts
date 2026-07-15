@@ -1,5 +1,6 @@
 import { isBlacklistedEmail } from "@/lib/edge-config";
 import { jackson } from "@/lib/jackson";
+import { cv, tracker } from "@/lib/tracker";
 import { isStored, storage } from "@/lib/storage";
 import { UserProps } from "@/lib/types";
 import { ratelimit } from "@/lib/upstash";
@@ -530,6 +531,11 @@ export const authOptions: NextAuthOptions = {
           Promise.allSettled([
             // track lead if dub_id cookie is present
             trackDubLead(user),
+            // record the new account as an X-Ray conversion
+            tracker.trackImmediate(cv.registrationComplete, {
+              distinctId: user.id,
+              identity: { email: user.email ?? undefined },
+            }),
             // trigger welcome workflow 15 minutes after the user signed up
             qstash.publishJSON({
               url: `${APP_DOMAIN_WITH_NGROK}/api/cron/welcome-user`,

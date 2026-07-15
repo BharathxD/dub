@@ -5,6 +5,7 @@ import { notifyPartnerApplication } from "@/lib/api/partners/notify-partner-appl
 import { getIP } from "@/lib/api/utils";
 import { getSession } from "@/lib/auth";
 import { qstash } from "@/lib/cron";
+import { cv, tracker } from "@/lib/tracker";
 import { ratelimit } from "@/lib/upstash";
 import { createProgramApplicationSchema } from "@/lib/zod/schemas/programs";
 import { prisma } from "@dub/prisma";
@@ -78,6 +79,7 @@ export const createProgramApplicationAction = actionClient
         program,
         data: parsedInput,
         partner: existingPartner,
+        userId: session.user.id,
         group: program.groups[0],
       });
     }
@@ -101,11 +103,13 @@ export const createProgramApplicationAction = actionClient
 
 async function createApplicationAndEnrollment({
   partner,
+  userId,
   program,
   data,
   group,
 }: {
   partner: Partner & { programs: ProgramEnrollment[] };
+  userId: string;
   program: Program;
   data: z.infer<typeof createProgramApplicationSchema>;
   group: PartnerGroup;
@@ -151,6 +155,14 @@ async function createApplicationAndEnrollment({
           partner,
           program,
           application,
+        }),
+
+        trackProgramApplication({
+          applicationId,
+          data,
+          distinctId: userId,
+          program,
+          group,
         }),
 
         // Auto-approve the partner
@@ -207,7 +219,61 @@ async function createApplication({
     },
   );
 
+  waitUntil(
+    trackProgramApplication({
+      applicationId: application.id,
+      data,
+      distinctId: application.id,
+      program,
+      group,
+    }),
+  );
+
   return {
     programApplicationId: application.id,
   };
+}
+
+function trackProgramApplication({
+  applicationId,
+  data,
+  distinctId,
+  program,
+  group,
+}: {
+  applicationId: string;
+  data: z.infer<typeof createProgramApplicationSchema>;
+  distinctId: string;
+  program: Program;
+  group: PartnerGroup;
+}) {
+  return tracker.trackImmediate(cv.submitApplication, {
+    distinctId,
+    eventId: applicationId,
+    identity: { email: data.email },
+    visitorId: getXRayVisitorId(),
+    metadata: {
+      application_id: applicationId,
+      program_id: program.id,
+      program_slug: program.slug,
+      group_id: group.id,
+    },
+  });
+}
+
+function getXRayVisitorId() {
+  const cookieValue = cookies().get("hy_attr")?.value;
+
+  if (!cookieValue) {
+    return undefined;
+  }
+
+  try {
+    const parsed = JSON.parse(
+      Buffer.from(cookieValue, "base64url").toString("utf-8"),
+    );
+    return typeof parsed?.vid === "string" ? parsed.vid : undefined;
+  } catch {
+    return undefined;
+  }
 }

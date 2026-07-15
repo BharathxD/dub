@@ -3,6 +3,7 @@ import { createWorkspaceId, prefixWorkspaceId } from "@/lib/api/workspace-id";
 import { withSession } from "@/lib/auth";
 import { checkIfUserExists } from "@/lib/planetscale";
 import { storage } from "@/lib/storage";
+import { tracker } from "@/lib/tracker";
 import {
   createWorkspaceSchema,
   WorkspaceSchema,
@@ -175,6 +176,15 @@ export const POST = withSession(async ({ req, session }) => {
         logo &&
           uploadedImageUrl &&
           storage.upload(uploadedImageUrl.replace(`${R2_URL}/`, ""), logo),
+        // record the workspace creation as an X-Ray activation event
+        tracker.trackImmediate("workspace_created", {
+          distinctId: session.user.id,
+          identity: { email: session.user.email ?? undefined },
+          metadata: {
+            workspace_id: workspace.id,
+            slug: workspace.slug,
+          },
+        }),
       ]),
     );
 

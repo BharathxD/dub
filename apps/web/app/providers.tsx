@@ -1,7 +1,9 @@
 "use client";
 
+import { TRACKER_ID } from "@/lib/tracker-id";
 import { PosthogPageview } from "@/ui/layout/posthog-pageview";
 import { Analytics as DubAnalytics } from "@dub/analytics/react";
+import { Analytics as XRayAnalytics } from "@hellyeah/x-ray/next";
 import {
   KeyboardShortcutProvider,
   TooltipProvider,
@@ -49,6 +51,10 @@ export default function RootProviders({ children }: { children: ReactNode }) {
             domainsConfig={{
               refer: "refer.dub.co",
             }}
+          />
+          <XRayAnalytics
+            websiteId={TRACKER_ID}
+            env={process.env.NEXT_PUBLIC_HELLYEAH_TRACKER_ENV}
           />
         </KeyboardShortcutProvider>
       </TooltipProvider>

@@ -3,6 +3,7 @@ import { inviteUser } from "@/lib/api/users";
 import { tokenCache } from "@/lib/auth/token-cache";
 import { getPlanCapabilities } from "@/lib/plan-capabilities";
 import { stripe } from "@/lib/stripe";
+import { cv, tracker } from "@/lib/tracker";
 import { WorkspaceProps } from "@/lib/types";
 import { redis } from "@/lib/upstash";
 import { Invite } from "@/lib/zod/schemas/invites";
@@ -158,6 +159,23 @@ export async function checkoutSessionCompleted(event: Stripe.Event) {
         ]
       : []),
   ]);
+
+  // record the paid subscription as an X-Ray conversion
+  const dubCustomerId = checkoutSession.metadata?.dubCustomerId;
+  if (dubCustomerId) {
+    const purchaser = users.find((user) => user.id === dubCustomerId);
+    await tracker.trackImmediate(cv.subscribe, {
+      distinctId: dubCustomerId,
+      eventId: checkoutSession.id,
+      identity: { email: purchaser?.email ?? undefined },
+      revenue: (checkoutSession.amount_total ?? 0) / 100,
+      currency: (checkoutSession.currency ?? "usd").toUpperCase(),
+      metadata: {
+        plan: planName,
+        workspace_id: workspaceId,
+      },
+    });
+  }
 }
 
 async function completeOnboarding({
